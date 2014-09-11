@@ -5,12 +5,8 @@ date: "Friday, September 05, 2014"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-Project 1, Reproducible Reasearch
-================================= 
+Project 1, Reproducible Research
+================================ 
 Introduction
 ------------
 
@@ -44,7 +40,9 @@ Fork/clone the GitHub repository created for this assignment. You will submit th
 
 NOTE: The GitHub repository also contains the dataset for the assignment so you do not have to download the data separately.
 
--------------------------------------------------------------------------------------------------------------------
+run PA1_driver.R (a wrapper), which starts knit2html, then sets up amd loads required libraries to run the script
+-----------------------------------------------------------------------------------------------------------------
+
 ```{r}
 library("plyr")
 library("ggplot2")
@@ -53,16 +51,11 @@ library("chron")
 library("scales")
 library("mice")
 ```
-Run knit2html first with PA1_driver.R (wrapper) ... then set up and load any function libraries and run the script
-------------------------------------------------------------------------------------------------------------------
-
-```{r}
-````
 Set interval storage and file path
 ----------------------------------
 
 ```{r}
-mStepsPerDay <- matrix(nrow=3, ncol=2, dimnames=list(c("orgSteps","newSteps1","newSteps2"),c("mean","median")))
+mStepsPerDay <- matrix(nrow=2, ncol=2, dimnames=list(c("orgSteps","newSteps"),c("mean","median")))
 timeForSteps <- matrix(NA, nrow=288, ncol=1, dimnames=list(NULL,"time"))
 
 activityDir <- "K:/COURSES/JHU_DataScience/Statistical_Inference"
@@ -74,10 +67,10 @@ Load the activity data
 ```{r}
 activity <- read.csv(pathToDataSet)    
 ```
-Find the total steps per day; note: there may be missing values converted to 0
-------------------------------------------------------------------------------
+Find the total steps per day - note, there may be missing values
+---------------------------------------------------------------
 There are 288 intervals per day and 61 days for the experiment.
-All the values for each day per interval are added together.
+All the values for each day by interval are added together.
 ```{r}
 stepsPerDay <- ddply(activity, .(date), summarize, totalSteps=sum(steps, na.rm=TRUE))
 head(stepsPerDay,10)
@@ -88,8 +81,12 @@ What is the mean and median total number of steps taken per day?
 ```{r}
 mStepsPerDay[1,1] <- mean(stepsPerDay$totalSteps)
 mStepsPerDay[1,2] <- median(stepsPerDay$totalSteps)
-mStepsPerDay
+
+print(sprintf("The mean of the total steps per day is: %7.2f, and the median is: %7.2f", 
+              mStepsPerDay[1,1], mStepsPerDay[1,2]))
 ```
+
+set the format for date types
 ```{r}
 stepsPerDay$date <- as.Date(stepsPerDay$date, "%Y-%m-%d")
 head(stepsPerDay$date)
@@ -98,7 +95,7 @@ Make a histogram of the total steps taken each day
 --------------------------------------------------
 
 ```{r, echo=TRUE}
-ggplot(stepsPerDay, aes(x=date, y=totalSteps)) +
+    ggplot(stepsPerDay, aes(x=date, y=totalSteps)) +
         geom_bar(fill="lightblue", stat="identity") +
         labs(x="Date", y="Total Steps", title="Total Steps per Day")
 ```             
@@ -108,8 +105,8 @@ what is the daily average activity pattern?
 ```{r}
 stepsPerInterval <- ddply(activity, .(interval), summarize, avgSteps=mean(steps, na.rm=TRUE))
 ```
-1. make a time series plot of 5-minute interval vs average steps for all days
------------------------------------------------------------------------------
+1. make a time series plot of 5-minute interval vs average steps
+----------------------------------------------------------------
 
 ```{r, echo=FALSE}
 stepsPerInterval <- cbind(stepsPerInterval,timeForSteps)
@@ -127,79 +124,74 @@ for (i in 1:nrow(stepsPerInterval))
 
 
 stepsPerInterval$time <- format(stepsPerInterval$time)
-stepsPerInterval$time <- as.POSIXct(strptime(paste("2012-10-01", stepsPerInterval$time, sep=" "),"%Y-%m-%d %H:%M:%S"))
-
+stepsPerInterval$time <- as.POSIXct(strptime(paste("2012-10-01", stepsPerInterval$time, sep=" "),
+                                             "%Y-%m-%d %H:%M:%S"))
+```
+```{r, echo=TRUE}
     ggplot(data=stepsPerInterval, aes(interval, avgSteps)) +
         geom_line(color="black") +# stat='identity') +
         labs(x="Interval", y="Mean Number of Steps", 
         title="The Mean Steps For Each Interval Over All Days\n(228 5 minute intervals/day) x 61 days")
        
 ``` 
-2. Find the 5-minute interval over all days with the maximum steps
----------------------------------------------------------------
+2. find the 5-minute interval over all days with the maximum steps
+------------------------------------------------------------------
 ```{r}
 maxstepsPerInterval <- stepsPerInterval$interval[which.max(stepsPerInterval$avgSteps)]
 print(sprintf("interval with the maximum counts is: %d", maxstepsPerInterval))
 ```
-Imputting mising values
-=======================
+Imputting missing values
+========================
 
-1. Fill in the missing data from the original dataset using MICE, 
-which is just a faster way of filling in blanks with NAs
---------------------------------------------------------------
-```{r, echo=FALSE}
+1. fill in the missing data from the original dataset using 'MICE'
+-----------------------------------------------------------------
+
+MICE, or Generates Multivariate Imputations by Chained Equations:
+Generates multiple imputations for incomplete multivariate data by Gibbs sampling. Missing data can occur anywhere in the data. The algorithm imputes an incomplete column (the target column) by generating 'plausible' synthetic values given other columns in the data. Each incomplete column must act as a target column, and has its own specific set of predictors. The default set of predictors for a given target consists of all other columns in the data. For predictors that are incomplete themselves, the most recently generated imputations are used to complete the predictors prior to imputation of the target column. - from RStudio help
+
+```{r, echo=TRUE}
 qMissingActivity <- sum(is.na(activity$steps), na.rm=FALSE) 
 print(sprintf("Total missing values: %d", qMissingActivity))
 ```
-2. Devise a stategy for filling in the missing data
+
+2. devise a stategy for filling in the missing data
 ---------------------------------------------------
 ```{r}
-newActivityWithoutBlanks <- mice(activity)
+newActivityNoBlanks <- mice(activity, printFlag=FALSE)
 ```
-3. Build a new dataset of equal size, but without missing values
+3. build a new dataset of equal size, but without missing values
 ----------------------------------------------------------------
-```{r}
-newFilledActivity <- complete(newActivityWithoutBlanks)
+```{r, echo=FALSE}
+newActivity <- complete(newActivityNoBlanks)
 ```
+4. make a histogram of the modified data for the total steps per day and calculate the mean and median
+------------------------------------------------------------------------------------------------------
 
-irow <- nrow(activity)
-iStep <- irow/nrow(stepsPerInterval)
-newActivity <- activity
-
-
-for (i in 1:iStep)
-    {  
-        if (is.na(newStepActivity$totalSteps[i]) | (newStepActivity$totalSteps[i] < 250)) 
-            {
-            #print(newStepActivity$date[i])
-            newStepActivity$totalSteps[i] <- mStepsPerDay[1,1]
-            }
-    }
-#head(newStepActivity)
-
-```
-4. Determine the mean and median for the new 'filled' data set
---------------------------------------------------------------
-```{r}  
-newStepsPerDay <- ddply(newFilledActivity, .(date), summarize, totalSteps=sum(steps))
+```{r, echo=FALSE}  
+newStepsPerDay <- ddply(newActivity, .(date), summarize, totalSteps=sum(steps))
 newStepsPerDay$date <- as.Date(newStepsPerDay$date, "%Y-%m-%d")
-
-newStepActivity <- ddply(newStepActivity, .(date), summarize, totalSteps=sum(steps))
-newStepActivity$date <- as.Date(newStepActivity$date, "%Y-%m-%d")
-head(newStepActivity)
-
+head(newStepsPerDay)
+    
 mStepsPerDay[2,1] <- mean(newStepsPerDay$totalSteps)
 mStepsPerDay[2,2] <- median(newStepsPerDay$totalSteps)
-mStepsPerDay
+
+print(sprintf("For the new dataset, the mean of the total steps per day is: %7.2f, and the median is: %7.2f", 
+              mStepsPerDay[2,1], mStepsPerDay[2,2]))
 ```
-Make a new histogram
---------------------
+The following answers the questions for this section of the report.
+        Do these values (the new mean and median) differ from the estimates from the first part of the assignment?
+        What is the impact of imputtimg missing data on the estimates of the total daily number of steps?
+        
+The original dataset yielded a mean and median of 9354.23 and 11395.00, respectively. After filling in the missing
+data, designated by NAs, the mean and median are 11358.25, and 11458.00. The new values, while larger that the 
+original numbers, are reasonable as the holes, which were labeled NA, have been filled with new values from the 
+use of MICE.
 
 ```{r}
         activity$date <- format(activity$date)
         activity$date <- as.POSIXct(strptime(paste(activity$date, "00:00:00", sep=" "),"%Y-%m-%d %H:%M:%S")) 
 
-        #used for the line tracing the concentration of values across each interval. Each bar shows
+        #used for the line, tracing the concentration of values across each interval. Each bar shows
         #288 data points (minus NAs) per day for 61 days (Oct 1 to Nov 30). Imagine 288 saws with 
         #uneven teeth height stacked on top of each other. Each tooth represents an interval, so 
         #moving down the saw-stack in the same tooth position, we have differing heights. These 
@@ -226,8 +218,30 @@ Make a new histogram
         #labs(x="Date", y="Total Steps / Day", 
         #     title="New Activity: Total Steps per Daily\nmean replaces counts < 250 or NA")
 ```
+Are there differences in the activity pattern between weekdays and weekends?
+============================================================================
 
-#mStepsPerDay[3,1] <- mean(newStepActivity$totalSteps)
-#mStepsPerDay[3,2] <- median(newStepActivity$totalSteps)
-#mStepsPerDay
-#Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+1. Make a new factor variable with two levels - weekday and weekend
+-------------------------------------------------------------------
+
+```{r}
+newActivity$day <- ifelse (weekdays(as.Date(newActivity$date)) %in% 
+                                c("Saturday", "Sunday"), "weekend", "weekday")
+newActivity$day <- as.factor(newActivity$day)
+```
+Make a panel plot
+-----------------
+
+```{r, echo=TRUE}
+        newStepsPerInterval <- ddply(newActivity, .(interval, day),
+                                     summarize, avgSteps=mean(steps, na.rm=TRUE))
+
+        ggplot(newStepsPerInterval, aes(x=interval, y=avgSteps)) +
+            theme_bw() +
+            geom_line(color="red") +
+            facet_wrap(~day, ncol=1) +
+            labs(x="Interval", y="Number of Steps", title="Daily Activity, Averaged") +
+            theme(plot.title=element_text(lineheight=.8, face="bold"),
+            strip.text.x=element_text(size=12),
+            strip.background=element_rect(fill="lightblue", color="black"))
+```
